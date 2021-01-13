@@ -17,10 +17,10 @@ if __name__ == '__main__':
     for step_size in [0.1, 0.4]:
         for i in range(n_runs):
             task = Task('gradient', n_actions, n_steps,
-                        rewards=np.random.normal(0, size=n_actions),
-                        reward_estimates_init=np.zeros(n_actions),
+                        rewards=np.random.normal(4, size=n_actions),
+                        reward_estimates_init=np.ones(n_actions)*4,
                         step_size=step_size,
-                        use_baseline=True)
+                        use_baseline=False)
             task.run_task()
             optimal_actions[:, i] = task.optimal_action_tracker
 
