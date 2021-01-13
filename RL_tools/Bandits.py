@@ -60,26 +60,36 @@ class UCBBandit(Bandit):
 
 
 class GradientBandit(Bandit):
-    def __init__(self, n_actions, n_steps, reward_estimates_init, step_size, baseline):
+    def __init__(self, n_actions, n_steps, reward_estimates_init, step_size, use_baseline):
         super().__init__(n_actions, n_steps, reward_estimates_init, step_size)
         self.preferences = np.ones(n_actions) / n_actions
-        self.baseline = baseline
+        self.probabilities = np.ones(n_actions) / n_actions
+        self.use_baseline = use_baseline
+        self.reward_baseline = 0
 
     def select_action(self):
-        action = np.random.choice(np.arange(self.n_actions), p=self.probabilities())
+        action = np.random.choice(np.arange(self.n_actions), p=self.probabilities)
         self.n_action_selected[action] += 1
         self.action = action
         return action
 
-    def probabilities(self):
-        return np.exp(self.preferences) / np.sum(np.exp(self.preferences))
+    def update_probabilities(self):
+        self.probabilities = np.exp(self.preferences) / np.sum(np.exp(self.preferences))
+
+    def update_reward_baseline(self, reward):
+        self.reward_baseline = self.reward_baseline + self.step_size*(reward-self.reward_baseline)
 
     def update_preferences(self, reward):
         alpha = 1 / self.n_action_selected[self.action] if self.step_size == 'mean' else self.step_size
-        self.preferences = self.preferences - alpha * (reward - self.reward_estimates) * self.probabilities()
-        self.preferences[self.action] = self.preferences[self.action] \
-                                        + alpha * (reward - self.reward_estimates[self.action])\
-                                        * (1-self.probabilities()[self.action])
+        self.update_probabilities()
+
+        if self.use_baseline:
+            self.preferences = self.preferences - alpha * (reward - self.reward_baseline) * self.probabilities
+            self.preferences[self.action] = self.preferences[self.action] + alpha * (reward - self.reward_baseline)\
+                                            * (1-self.probabilities[self.action])
+        else:
+            self.preferences = self.preferences - alpha * reward * self.probabilities
+            self.preferences[self.action] = self.preferences[self.action] + alpha * reward * (1 - self.probabilities[self.action])
 
 
 class Task:
@@ -110,7 +120,10 @@ class Task:
         reward = self.rewards[action] + np.random.normal()
         self.bandit.update_reward_estimate(reward)
         if self.bandit_type == 'gradient':
+            self.bandit.update_reward_baseline(reward)
             self.bandit.update_preferences(reward)
+        elif self.bandit_type in ['epsilon_greedy', 'upper_confidence_bound']:
+            self.bandit.update_reward_estimate(reward)
 
         # trackers
         self.reward_tracker[self.step - 1] = reward
